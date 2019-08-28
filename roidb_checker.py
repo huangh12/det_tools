@@ -1,38 +1,50 @@
+#coding:utf-8
+'''
+Description: This file is to check the roidb.pkl.
+             Plot the boxes on the image to review the correctness of GT boxes.
+             Obtain the statistics of the boxes distribution, including the scale and classes
+author: he.huang
+'''
+
+import sys
+sys.path.insert(0, '/opt/hdfs/user/he.huang/mxnet-python-binds/mxnet-zongbo')
+import mxnet as mx
 import cv2
 import cPickle
 import random
 import os
-import sys; sys.path.insert(0, '..')
-import mxnet as mx
 import numpy as np
 from matplotlib import pyplot as plt
 
-color = [(0,0,225),
-         (0,225,0),
-         (225,0,0),
-         (0,225,225),
-         (0,0,0)]
-ind2cls = {1:'nohelmet', 2:'withhelmet', -1: 'ignore', 4: 'unknown'}
+# get adequate color list for different classes
+from random import randint
+colors = []
+for i in range(100):
+    colors.append((randint(0, 255), randint(0, 255), randint(0, 255)))
 
+
+# draw the boxes
 def draw_boxes(im, gt_classes, boxes):
     for cls_ind, box in zip(gt_classes, boxes):
-        cv2.rectangle(im, (box[0], box[1]), (box[2], box[3]), color=color[cls_ind], thickness=2)
-        cv2.putText(im, text='%s' %(ind2cls[cls_ind]), org=(box[0], box[1]), fontFace=cv2.FONT_HERSHEY_SIMPLEX, \
-                    fontScale=0.8, color=color[cls_ind], thickness=2)
+        cv2.rectangle(im, (box[0], box[1]), (box[2], box[3]), color=colors[cls_ind], thickness=2)
+        cv2.putText(im, text='cls%s' %(cls_ind), org=(box[0], box[1]), fontFace=cv2.FONT_HERSHEY_SIMPLEX, \
+                    fontScale=0.8, color=colors[cls_ind], thickness=2)
     return im
+
 
 def cv2_read_img(read_img_dir, img_name):
     for _ in read_img_dir:
         img_path = os.path.join(_, img_name)
         if os.path.isfile(img_path):
             with open(os.path.join(img_path), 'rb') as f:
-                check_chars = f.read()[-2:]
-            if check_chars != b'\xff\xd9':
-                print('Not complete image')
+                im = f.read()[-2:]
+            if not (im[:2] == b'\xff\xd8' and im[-2:] == b'\xff\xd9'):
+                print('Not complete image: %s' %img_path)
             else:
                 img = cv2.imread(img_path, cv2.IMREAD_COLOR)
             return img
     return None
+
 
 def rec_read_img(roi_rec, imgrec, rgb=False):
     _, img = mx.recordio.unpack_img(imgrec[roi_rec['imgrec_id']].read_idx(roi_rec['imgrec_idx']), cv2.IMREAD_COLOR)
@@ -40,11 +52,13 @@ def rec_read_img(roi_rec, imgrec, rgb=False):
         img = img[:, :, ::-1]
     return img
 
+
 def merge_roidb(roidb_list):
     roidb = roidb_list[0]
     for r in roidb_list[1:]:
         roidb.extend(r)
     return roidb
+
 
 def load_roidb(roidb_path_list, imglst_path_list=None):
     roidb_list = []
@@ -54,11 +68,12 @@ def load_roidb(roidb_path_list, imglst_path_list=None):
                 roidb = cPickle.load(fn)
             roidb_list.append(roidb)
 
-    # if imglst_path_list is not None:
-        # add_roidb_imgrec_idx(roidb_list, imglst_path_list)
+    if imglst_path_list is not None:
+        add_roidb_imgrec_idx(roidb_list, imglst_path_list)
 
     roidb = merge_roidb(roidb_list)
     return roidb
+
 
 def add_roidb_imgrec_idx(roidb_list, imglst_path_list):
     assert len(roidb_list) == len(imglst_path_list)
@@ -81,6 +96,7 @@ def add_roidb_imgrec_idx(roidb_list, imglst_path_list):
             roi_rec['imgrec_idx'] = img_list[img_name]
 
 
+
 checker_roidb_path = '/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/all_train_data/train_all.pkl'
 checker_roidb_path = '/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/public_data/roidbs/trainval.pkl'
 checker_roidb_path = '/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/data_from_yuhao/trainval.pkl'
@@ -96,14 +112,19 @@ checker_roidb_path = '/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-
 # checker_idx_path = ['/opt/hdfs/user/jianye.he/common/dataset/cocohead/images_lst_rec/train2017.idx']
 # checker_rec_path = ['/opt/hdfs/user/jianye.he/common/dataset/cocohead/images_lst_rec/train2017.rec']
 
+# checker_roidb_path = '/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/pachong_data/roidbs_head/train.pkl'
+# read_img_dir = ['/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/pachong_data/pachong_images/']
+# write_img_dir = '/mnt/data-1/he.huang/project/helmet-det-x1-job/helmet_det_x1/show_pachong_imgs'
 
-checker_roidb_path = '/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/pachong_data/roidbs_head/train.pkl'
-read_img_dir = ['/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/pachong_data/pachong_images/']
-write_img_dir = '/mnt/data-1/he.huang/project/helmet-det-x1-job/helmet_det_x1/show_pachong_imgs'
+checker_roidb_path = ['/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/wider_train_pred_head.pkl']
+checker_lst_path = ['/opt/hdfs/user/he.huang/project/wider_face_2019/dataset/WiderFace2019/images_lst_rec/train.lst']
+checker_idx_path = ['/opt/hdfs/user/he.huang/project/wider_face_2019/dataset/WiderFace2019/images_lst_rec/train.idx']
+checker_rec_path = ['/opt/hdfs/user/he.huang/project/wider_face_2019/dataset/WiderFace2019/images_lst_rec/train.rec']
+write_img_dir = './show'
 
-rec_read = False
+rec_read = True
 cv2_read = not rec_read
-vis = True
+vis = False
 vis_num = 10**10
 
 if vis:
@@ -134,20 +155,13 @@ boxRatioStat = []
 boxScaleStat = []
 pick_roidb = []
 random.shuffle(roidb)
-for r in roidb:
-    # if r['gt_classes'].tolist().count(1) > 5 or \
-    #    r['gt_classes'].tolist().count(1) == 0 :
-    #     continue    
+for i, r in enumerate(roidb):
 
-    # if r['image'] != '00000422.jpg':
-        # continue
-
-    cnt += 1
-    print(cnt)
-    r['read_method'] = 'rec'
-    pick_roidb.append(r)
-    # boxRatioStat.extend( ((r['boxes'][:,3]-r['boxes'][:,1])/(r['boxes'][:,2]-r['boxes'][:,0])).tolist() )
-    # boxScaleStat.extend( ((r['boxes'][:,3]-r['boxes'][:,1])*(r['boxes'][:,2]-r['boxes'][:,0])).tolist() )
+    print(i)
+    boxes_ratio = (r['boxes'][:,3]-r['boxes'][:,1]) / (r['boxes'][:,2]-r['boxes'][:,0])
+    boxes_scale = np.sqrt((r['boxes'][:,3]-r['boxes'][:,1] + 1) * (r['boxes'][:,2]-r['boxes'][:,0]+1))
+    boxRatioStat.extend( (boxes_ratio).tolist() )
+    boxScaleStat.extend( (boxes_scale).tolist() )
 
     for _ in r['gt_classes']:
         if _ not in [-1,1,2]:
@@ -166,9 +180,6 @@ for r in roidb:
             boxClsStat[u] = c
         else:
             boxClsStat[u] += c
-
-    # if boxClsStat[1] > 20000:
-    #     break
 
     if vis:
         img = None
@@ -189,18 +200,16 @@ for r in roidb:
            print('save as %s' %r['image'])
            import pdb; pdb.set_trace()
 
-        # img = draw_boxes(img.copy(), r['gt_classes'], r['boxes'])
-        # save_path = os.path.join(write_img_dir, os.path.basename(r['image']))
-        # cv2.imwrite(save_path, img)
-        # print('save plotted im to %s' %(save_path))
-        if cnt == vis_num:
+        img = draw_boxes(img.copy(), r['gt_classes'], r['boxes'])
+        save_path = os.path.join(write_img_dir, os.path.basename(r['image']))
+        cv2.imwrite(save_path, img)
+        print('save plotted im to %s' %(save_path))
+        if i == vis_num-1:
             break
 
 print(boxClsStat)
 print(non_empty_cnt)
-import pdb; pdb.set_trace()
-# with open('pick_coco_head.pkl', 'w') as f:
-#     cPickle.dump(pick_roidb, f, cPickle.HIGHEST_PROTOCOL)
+
 # s1 = [_ for _ in boxRatioStat if _>0 and _<100]
 # s2 = [_ for _ in boxScaleStat if _>0 and _<999999]
 
