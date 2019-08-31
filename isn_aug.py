@@ -18,9 +18,13 @@ step 2: To obtain the optimal anchor scale/ratio setting from the given data.
 
 step 3: The former step 1 gives the distribution of boxes to be detect. 
         We then crop patches from the image with ISN according to the roidbs.pkl.
-        However, there are more than one method to crop the image, e.g., by scale(sqrt(w*h)) or by ratio, max(w, h).
-        During the label assignment, the ignore boxes should be labeled as -1, -2 -3 and so on, instead being all labeld as -1.
-        Simply labeled all ingnored boxes as -1 will inevitably cause more false positive.
+        However, there are more than one method to crop the image, e.g., by scale(sqrt(w*h)) or by ratio, max(w, h) and so on.
+        During the label assignment, the ignore boxes should be labeled as -1, -2 -3 ..., instead being all labeld as -1.
+        Simply labeled all ingnored boxes as -1 could cause more false positive.
+        The transformed roidb will be saved as ins_roidb.pkl. People who use the isn_roidb.pkl for training should obey that
+        1. Do remember to crop the each image by the 'crop' key-value items in isn_roidb.
+        2. Do not resize the croped image again.
+
 
 
 
@@ -33,8 +37,10 @@ from utils.data_workers import chip_worker, chip_generate
 
 config = edict()
 config.num_classes = 1  # exclude the background
-config.orig_roidb_path = '/opt/hdfs/user/he.huang/project/wider_face_2019/dataset/WiderFace2019/roidbs/train.pkl'
-config.test_scale = (800, 1333)
+config.test_orig_roidb_path = '/opt/hdfs/user/he.huang/project/wider_face_2019/dataset/WiderFace2019/roidbs/val.pkl'
+config.train_orig_roidb_path = '/opt/hdfs/user/he.huang/project/wider_face_2019/dataset/WiderFace2019/roidbs/train.pkl'
+config.test_scale = (1200, 1700)
+config.train_scale = (600, 1000)
 
 
 
@@ -55,7 +61,7 @@ class Stats:
         pstr += 'min: %f\n' %self.arr.min()
         pstr += 'max: %f\n' %self.arr.max()
         pstr += 'mean: %f\n' %self.arr.mean()
-        pstr += 'numbers: %f\n' %self.size
+        pstr += 'box number: %f\n' %self.size
         ppart, npart = 100./ndiv, round((self.size-1)/ndiv)
         for i in range(ndiv):
             pstr += '%.2f%s %s %.2f%s : %.2f -> %.2f\n' \
@@ -76,59 +82,63 @@ def get_im_scale(size, im_shape):
     return im_scale
 
 
-boxClsStat = {}
-boxes = []
-boxRatioStat = []
-boxScaleStat = []
-rScaleStat = []
-with open(config.orig_roidb_path, 'r') as f:
-    orig_roidb = cPickle.load(f)
+def analyze_roidb(roidb_path, num_classes, scale):
+    with open(roidb_path, 'r') as f:
+        roidb = cPickle.load(f)
+        print('load %s with %d images' %(roidb_path, len(roidb)))
 
+    boxClsStat = {}
+    boxes = []
+    boxRatioStat = []
+    boxScaleStat = []
+    rboxScaleStat = []
+    print('distribute the ignore label -1 to all %d classes (exclude the background!!)' %num_classes)
+    for r in roidb:
+        '''
+        preprocess the gt_classes:
+        In current annotation rule, the ignore region are simply labeled as -1.
+        Since we want to generate class-aware ignore region, we manually distribute the -1 region to all classes    
+        '''
+        assert 0 not in r['gt_classes'], '0 in gt_classes!'
+        ig_idx = np.where(r['gt_classes'] == -1)[0]
+        append_cls = np.tile(-1 * (2 + np.arange(num_classes-1)), len(ig_idx)).astype(np.int32) 
+        append_box = np.zeros((0, 4), dtype=np.float32)
+        for idx in ig_idx:
+            append_box = np.vstack([append_box, np.tile(r['boxes'][idx], (num_classes-1,1))]).astype(np.float32)
 
-print('distribute the ignore label -1 to all %d classes (exclude the background!!)' %config.num_classes)
-for r in orig_roidb:
+        r['gt_classes'] = np.hstack( [r['gt_classes'], append_cls] )
+        r['boxes'] = np.vstack( [r['boxes'], append_box] )
+        assert r['gt_classes'].shape[0] == r['boxes'].shape[0]
 
-    '''
-    preprocess the gt_classes:
-    In current annotation rule, the ignore region are simply labeled as -1.
-    Since we want to generate class-aware ignore region, we manually distribute the -1 region to all classes    
-    '''
-    assert 0 not in r['gt_classes'], '0 in gt_classes!'
-    ig_idx = np.where(r['gt_classes'] == -1)[0]
-    append_cls = np.tile(-1 * (2 + np.arange(config.num_classes-1)), len(ig_idx)).astype(np.int32) 
-    append_box = np.empty((0, 4), dtype=np.float32)
-    for idx in ig_idx:
-        append_box = np.vstack([append_box, np.tile(r['boxes'][idx], (1,config.num_classes-1))]).astype(np.float32)
+        # do stat
+        unique, counts = np.unique(r['gt_classes'], return_counts=True)
+        for u, c in zip(unique, counts):
+            if u not in boxClsStat:
+                boxClsStat[u] = c
+            else:
+                boxClsStat[u] += c
 
-    r['gt_classes'] = np.hstack( [r['gt_classes'], append_cls] )
-    r['boxes'] = np.vstack( [r['boxes'], append_box] )
-    assert r['gt_classes'].shape[0] == r['boxes'].shape[0]
+        stat_idx = np.where(r['gt_classes']>0)[0]
+        boxes.extend( (r['boxes'][stat_idx].tolist()) )
+        boxes_ratio = (r['boxes'][stat_idx,3]-r['boxes'][stat_idx,1]+1) / (r['boxes'][stat_idx,2]-r['boxes'][stat_idx,0]+1)
+        boxes_scale = np.sqrt((r['boxes'][stat_idx,3]-r['boxes'][stat_idx,1]) * (r['boxes'][stat_idx,2]-r['boxes'][stat_idx,0]))
+        boxRatioStat.extend( (boxes_ratio).tolist() )
+        boxScaleStat.extend( (boxes_scale).tolist() )
 
+        # We assume the r['height'] and r['width'] are correct, which should be checked first.
+        im_scale = get_im_scale(size=scale, im_shape=(r['height'],r['width']))
+        rboxScaleStat.extend( (im_scale*boxes_scale).tolist() )
 
-    # do stat
-    unique, counts = np.unique(r['gt_classes'], return_counts=True)
-    for u, c in zip(unique, counts):
-        if u not in boxClsStat:
-            boxClsStat[u] = c
-        else:
-            boxClsStat[u] += c
+    boxRatioStat_ = Stats(boxRatioStat, name='boxRatioStat')
+    boxScaleStat_ = Stats(boxScaleStat, name='boxScaleStat')
+    rboxScaleStat_ = Stats(rboxScaleStat, name='rescaled boxScaleStat %s'%scale)
+    boxRatioStat_.analysis(ndiv=3)
+    boxScaleStat_.analysis(ndiv=10)
+    rboxScaleStat_.analysis(ndiv=10)
+    print('=======================\n')
 
-    boxes.extend( (r['boxes'].tolist()) )
-    boxes_ratio = (r['boxes'][:,3]-r['boxes'][:,1]) / (r['boxes'][:,2]-r['boxes'][:,0])
-    boxes_scale = np.sqrt((r['boxes'][:,3]-r['boxes'][:,1]) * (r['boxes'][:,2]-r['boxes'][:,0]))
-    boxRatioStat.extend( (boxes_ratio).tolist() )
-    boxScaleStat.extend( (boxes_scale).tolist() )
-
-    # We assume the r['height'] and r['width'] are correct, which should be checked first.
-    im_scale = get_im_scale(size=config.test_scale, im_shape=(r['height'],r['width']))
-    rScaleStat.extend( (im_scale*boxes_scale).tolist() )
-
-boxRatioStat_ = Stats(boxRatioStat, name='boxRatioStat')
-boxScaleStat_ = Stats(boxScaleStat, name='boxScaleStat')
-boxRatioStat_.analysis(ndiv=3)
-boxScaleStat_.analysis(ndiv=10)
-
-
+analyze_roidb(config.test_orig_roidb_path, num_classes=config.num_classes, scale=config.test_scale)
+analyze_roidb(config.train_orig_roidb_path, num_classes=config.num_classes, scale=config.test_scale)
 
 # ----------------- step 2: ISN --------------------
 import copy
@@ -168,8 +178,8 @@ def get_valid_inds(boxes, shape, scale_range, chip_gt_overlap):
 config.chip_gt_overlap = 0.7
 config.chip_truncation_ignore = 0.4
 ## CHIP GENERATION PARAMS
-config.chip_size = (576, 576)
-# config.chip_size = [640,640]
+# config.chip_size = (576, 576)
+config.chip_size = [640,640]
 # Whether to use C++ or python code for chip generation
 config.cpp_chips = True
 # Multi-processing params
@@ -185,9 +195,11 @@ config.pyramid_scales = [4.0, 2.0, 1.0, 0.5, 0.25]
 config.chip_stride = np.random.randint(56, 60)  
 # config.valid_ranges = [[-1,80], [8,160], [16,320], [32,640], [64,-1]]
 # fpn-v-5 cs576
-config.valid_ranges = [[-1,140], [8,280], [16,560], [32,1120], [64,-1]]
+# config.valid_ranges = [[-1,140], [8,280], [16,560], [32,1120], [64,-1]]
 # fpn-v-5_1 cs576
 # config.valid_ranges = [[-1,140], [16,280], [32,560], [64,1120], [128,-1]]
+# 16-600
+config.valid_ranges = [[-1,152], [8,304], [16,608], [32,1216], [64,-1]]
 # all
 # config.valid_ranges = [[0,1000], [0,1000], [0,1000], [0,1000], [0,1000]]
 
@@ -196,19 +208,22 @@ config.learning_range = config.valid_ranges[config.pyramid_scales.index(1)]
 config.isn_roidb_save_path = './train_isn.pkl'
 # ----------
 
+with open(config.train_orig_roidb_path, 'r') as f:
+    train_orig_roidb = cPickle.load(f)
+
 # get the chip
 chip_worker_ = chip_worker(chip_size=config.chip_size[0], cfg=config)
-chip_index = chip_generate(orig_roidb, chip_worker_, cfg=config, n_neg_per_im=config.n_neg_per_im)
+chip_index = chip_generate(train_orig_roidb, chip_worker_, cfg=config, n_neg_per_im=config.n_neg_per_im)
 
 # distribute the chip into isn_roidb
 isn_roidb = []
-for r in orig_roidb:
+for r in train_orig_roidb:
     for crop in r['crops']:
         append_ids = np.zeros([0], dtype=np.int32)
         crop_coordinates, im_scale, _, _ = crop
         all_boxes = copy.deepcopy(r['boxes']).astype(np.float)
         # ----------------- for debug-------------------#
-        # img_dir = '/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/all_train_data/train_images/'
+        # img_dir = '/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/all_train_data/train_images'
         # im_ori = cv2.imread(os.path.join(img_dir, r['image']), cv2.IMREAD_COLOR)
         # im_ori_draw = draw_boxes(copy.deepcopy(im_ori), r['boxes'], r['gt_classes'])
 
@@ -231,7 +246,7 @@ for r in orig_roidb:
         valid_gt_classes = r['gt_classes'][valid_inds]
 
         # invalid (ignore the region of invalid gt boxes with large overlap with current chip)
-        invalid_inds = np.array(list(set(range(len(r['gt_classes']))) - set(valid_inds))).astype(np.int)
+        invalid_inds = np.setdiff1d(np.arange(len(r['gt_classes'])), valid_inds).astype(np.int)
         invalid_boxes = all_boxes[invalid_inds]
         invalid_gt_classes = r['gt_classes'][invalid_inds]
 
@@ -255,6 +270,8 @@ for r in orig_roidb:
 
         crop_roidb = dict()
         crop_roidb['image'] = r['image']
+        # crop_roidb['width'] = r['width']
+        # crop_roidb['height'] = r['height']
         crop_roidb['boxes'] = gt_boxes
         crop_roidb['gt_classes'] = gt_classes
         crop_roidb['crop'] = np.append(crop_coordinates, im_scale)
