@@ -23,7 +23,7 @@ step 2: The former step 1 gives the distribution of boxes to be detect.
               It's because ISN crops the image in an object-centric way and increase the foreground fraction.
          ii. Using a smaller warmup lr, i.e., the default 0.0001, instead of the 1/3 lr recommended by FPN paper.
               This may due to ISN enable larger batch size training than previous training paradigm. So smaller warmup lr is needed
-              to avoid divergence at the begining of training. See jobid 42191(converge) and 42493(diverge).
+              to avoid divergence at the begining of training. See jobid 42491(converge) and 42493(diverge).
         
 
 step 3: To obtain the optimal anchor scale/ratio setting from the given data.
