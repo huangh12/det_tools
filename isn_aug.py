@@ -8,15 +8,8 @@ step 1: Obatin the statistics of the boxes distribution after RESIZE, due to the
         of the TEST set (e.g., scale distribution of objects) that the models should adapt to. 
         Especially when the train set and test set are not i.i.d, which usually happens.
 
-step 2: To obtain the optimal anchor scale/ratio setting from the given data.
-        This is realized by search the scale/ratio space such that as many GT boxes as possible
-        can be matched, in a deterministic rule, e.g. match decided by IoU value.
-        The optimal anchor ratio can directly refer to the ratio of given data boxes, while the optimal
-        anchor scale is somewhat complimcated. Again, these should be drawn from the TEST set as well.
-        However, recent research exhibits good results by guiding the anchor via feature.
-        This is a topic worth exploring and could reduce the difficulty of designing anchor manually.
 
-step 3: The former step 1 gives the distribution of boxes to be detect. 
+step 2: The former step 1 gives the distribution of boxes to be detect. 
         We then crop patches from the image with ISN according to the roidbs.pkl.
         However, there are more than one method to crop the image, e.g., by scale(sqrt(w*h)) or by ratio, max(w, h) and so on.
         During the label assignment, the ignore boxes should be labeled as -1, -2 -3 ..., instead being all labeld as -1.
@@ -24,8 +17,22 @@ step 3: The former step 1 gives the distribution of boxes to be detect.
         The transformed roidb will be saved as ins_roidb.pkl. People who use the isn_roidb.pkl for training should obey that
         1. Do remember to crop the each image by the 'crop' key-value items in isn_roidb.
         2. Do not resize the croped image again.
+        Besides, for retinanet, one may want to:
+          i. Change the last conv bias init to increase the foreground probability from 0.01 to 0.1.  
+              Otherwise, the training may diverge in the begining. See jobid 42455/42491(converge) and 42492(diverge) of ksyun-train.
+              It's because ISN crops the image in an object-centric way and increase the foreground fraction.
+         ii. Using a smaller warmup lr, i.e., the default 0.0001, instead of the 1/3 lr recommended by FPN paper.
+              This may due to ISN enable larger batch size training than previous training paradigm. So smaller warmup lr is needed
+              to avoid divergence at the begining of training. See jobid 42191(converge) and 42493(diverge).
+        
 
-
+step 3: To obtain the optimal anchor scale/ratio setting from the given data.
+        This is realized by search the scale/ratio space such that as many GT boxes as possible
+        can be matched, in a deterministic rule, e.g. match decided by IoU value.
+        The optimal anchor ratio can directly refer to the ratio of given data boxes, while the optimal
+        anchor scale is somewhat complimcated. Again, these should be drawn from the TEST set as well.
+        However, recent research exhibits good results by guiding the anchor via feature.
+        This is a topic worth exploring and could reduce the difficulty of designing anchor manually.
 
 
 
@@ -38,7 +45,8 @@ from utils.data_workers import chip_worker, chip_generate
 config = edict()
 config.num_classes = 1  # exclude the background
 config.test_orig_roidb_path = '/opt/hdfs/user/he.huang/project/wider_face_2019/dataset/WiderFace2019/roidbs/val.pkl'
-config.train_orig_roidb_path = '/opt/hdfs/user/he.huang/project/wider_face_2019/dataset/WiderFace2019/roidbs/train.pkl'
+# config.train_orig_roidb_path = '/opt/hdfs/user/he.huang/project/wider_face_2019/dataset/WiderFace2019/roidbs/train.pkl'
+config.train_orig_roidb_path = './train_isn.pkl'
 config.test_scale = (1200, 1700)
 config.train_scale = (600, 1000)
 
@@ -139,6 +147,8 @@ def analyze_roidb(roidb_path, num_classes, scale):
 
 analyze_roidb(config.test_orig_roidb_path, num_classes=config.num_classes, scale=config.test_scale)
 analyze_roidb(config.train_orig_roidb_path, num_classes=config.num_classes, scale=config.test_scale)
+exit()
+
 
 # ----------------- step 2: ISN --------------------
 import copy
@@ -270,8 +280,6 @@ for r in train_orig_roidb:
 
         crop_roidb = dict()
         crop_roidb['image'] = r['image']
-        # crop_roidb['width'] = r['width']
-        # crop_roidb['height'] = r['height']
         crop_roidb['boxes'] = gt_boxes
         crop_roidb['gt_classes'] = gt_classes
         crop_roidb['crop'] = np.append(crop_coordinates, im_scale)
@@ -294,3 +302,146 @@ with open(config.isn_roidb_save_path, 'w') as f:
     cPickle.dump(isn_roidb, f, cPickle.HIGHEST_PROTOCOL)
     print('Dump generated isn_roidb to %s' %config.isn_roidb_save_path)
 
+
+
+# ----------------- step 3: Obtain the optimal anchor ratio/scale --------------------
+'''
+Intuitively, the optimal anchor ratio can directly refer the median value of the TEST set.
+Although, in practice, we often want more than one optimal ratio value. 
+We assume the optimal ratio is just one number here, for simplicity.
+Further, we assume there is only one anchor scale in each stride. This also simplify the optimization.
+
+
+And, it's still unclear for me that the optimal anchor setting should be drawn from TEST set or
+from the generated isn roidb. Because the isn roidb somewhat represents the boxes detector should fit to.
+Thus, I am still confused the order of isn(step 2) and solution of anchor setting(step 3).
+For now, we solve the anchor ratio/scale from isn roidb for simplicity.
+'''
+
+print('----------------- step 3: Obtain the optimal anchor ratio/scale --------------------')
+
+import cPickle
+from utils.anchor.generate_anchor import generate_anchors, expand_anchors
+from utils.bbox.bbox_transform import *
+import numpy as np
+import copy
+from tqdm import tqdm
+
+# It depends on prior to define the gain value
+def gain_value(pre_state, cur_match):
+    gain_of_matched_gt = 0
+    gain_of_unmatched_gt = 0
+    for p, c in zip(pre_state, cur_match):
+        gain_of_matched_gt += np.sum(c[p!=0])
+        gain_of_unmatched_gt += np.sum(c[p==0])
+    return gain_of_unmatched_gt
+
+
+def update_match_value(all_match_value, stride_i_match_value):
+    for a, s in zip(all_match_value, stride_i_match_value):
+        a += np.sum(c[p!=0])
+        gain_of_unmatched_gt += np.sum(c[p==0])
+
+
+config.input_roidb_path = './train_isn.pkl'
+config.fpn_stride = [8, 16, 32, 64]
+config.anchor_ratio = (1.25,)
+config.init_anchor_scale = (1, 1, 1, 1)
+config.solve_step = 1
+config.end_anchor_scale = (100, 50, 50, 20)
+config.input_image_size = (640, 640)
+config.positive_anchor_overlap = 0.5
+config.negative_anchor_overlap = 0.4
+
+with open(config.input_roidb_path, 'r') as f:
+    roidb = cPickle.load(f)
+    print('load %s with %d images.' %(config.input_roidb_path, len(roidb)))
+
+# import random
+# random.shuffle(roidb)
+# roidb = roidb[:100]
+
+# init the match state
+all_gt_boxes = []
+all_match_value = []
+num_gt_boxes = 0
+for r in roidb:
+    fg_idx = np.where(r['gt_classes']>0)[0]
+    gt_boxes = r['boxes'][fg_idx]
+    all_gt_boxes.append(gt_boxes)
+    all_match_value.append(np.zeros(fg_idx.shape[0]))
+    num_gt_boxes += fg_idx.shape[0]
+print('There are %d boxes in total.' %num_gt_boxes)
+zeros_init = copy.deepcopy(all_match_value)
+
+# solve for optimal anchor scale for each stride
+stride_all_match_value = []
+optimal_scale_list = []
+for i, stride in enumerate(config.fpn_stride):
+    print('\nsolving for optimal anchor scale for stride %d...' %stride)
+
+    stride_i_match_value = copy.deepcopy(zeros_init)
+    stride_i_optimal_scale = -1  # init to -1
+    pre_gain_value = 0 # init to 0
+    optimal_scale = -1
+    for s in tqdm( range(config.init_anchor_scale[i], config.end_anchor_scale[i]+config.solve_step, config.solve_step) ):
+        stride_i_scale_s_match_value = copy.deepcopy(zeros_init)
+        base_anchors = generate_anchors(base_size=stride, ratios=list(config.anchor_ratio), scales=[s])
+        feat_height, feat_width = map(lambda x: round(x/stride), config.input_image_size)
+        anchors = expand_anchors(base_anchors, feat_height, feat_width, stride)
+        inds_inside = range(anchors.shape[0])
+
+        # label: [1, oo) is positive, 0 is negative, -1 is dont care
+        labels = np.empty((len(inds_inside),), dtype=np.float32)
+        labels.fill(-1)
+
+        cnt = 0
+        for gt_boxes, match_value in zip(all_gt_boxes, stride_i_scale_s_match_value):
+            # print(cnt)
+            # cnt+=1
+            if gt_boxes.size > 0:
+                # overlap between the anchors and the gt boxes
+                # overlaps (ex, gt)
+                overlaps = bbox_overlaps(anchors.astype(np.float), gt_boxes.astype(np.float))
+                argmax_overlaps = overlaps.argmax(axis=1)
+                max_overlaps = overlaps[np.arange(len(inds_inside)), argmax_overlaps]
+                '''
+                gt_argmax_overlaps = overlaps.argmax(axis=0)
+                gt_max_overlaps = overlaps[gt_argmax_overlaps, np.arange(overlaps.shape[1])]
+                gt_argmax_overlaps = np.where(overlaps == gt_max_overlaps)[0]
+                # assign bg labels first so that positive labels can clobber them
+                labels[max_overlaps < config.negative_anchor_overlap] = 0
+                # fg label: for each gt, anchor with highest overlap
+                gt_inds = argmax_overlaps[gt_argmax_overlaps]
+                labels[gt_argmax_overlaps] = gt_classes[gt_inds]
+                '''
+                # fg label: above threshold IoU
+                inds = max_overlaps >= config.positive_anchor_overlap
+                gt_inds = argmax_overlaps[inds]
+                # if gt_inds.shape[0]!=0:
+                    # print('stride %d anchor scale %d' %(stride, s))
+                    # print(gt_boxes)
+                    # print(gt_inds)
+                times = np.bincount(gt_inds)
+                match_value[np.arange(len(times))] = times
+
+        gain = gain_value(all_match_value, stride_i_scale_s_match_value)
+
+        if gain > pre_gain_value:
+            stride_i_match_value = stride_i_scale_s_match_value
+            optimal_scale = s
+            pre_gain_value = gain
+
+    # store the optimal scale and update the all_match_value
+    print('stride %d optimal anchor scale: %d (gain value: %d)' %(stride, optimal_scale, pre_gain_value))
+    optimal_scale_list.append(optimal_scale)
+    all_match_value = list(map(lambda x,y: x+y, all_match_value, stride_i_match_value))
+    
+unmatch_gt_boxes = list(map(lambda x: sum(x==0), all_match_value))
+num_unmatch_gt_boxes = sum(unmatch_gt_boxes)
+matched_anchors = list(map(lambda x: sum(x), all_match_value))
+num_matched_anchors = sum(matched_anchors)
+avg_anchor = float(num_matched_anchors) / (num_gt_boxes-num_unmatch_gt_boxes)
+
+print('\nThere are %d gt boxes unmatched.' %(num_unmatch_gt_boxes))
+print('Each matched gt boxes can match %f anchors on average.' %(avg_anchor))
