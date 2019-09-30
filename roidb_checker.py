@@ -7,7 +7,9 @@ author: he.huang
 '''
 
 import sys
-sys.path.insert(0, '/opt/hdfs/user/he.huang/mxnet-python-binds/mxnet-zongbo')
+# sys.path.insert(0, '/opt/hdfs/user/he.huang/mxnet-python-binds/mxnet-zongbo')
+sys.path.insert(0, '/home/users/he.huang/mxnet-zongbo')
+
 import mxnet as mx
 import cv2
 import cPickle
@@ -26,8 +28,8 @@ for i in range(100):
 # draw the boxes
 def draw_boxes(im, gt_classes, boxes):
     for cls_ind, box in zip(gt_classes, boxes):
-        cv2.rectangle(im, (box[0], box[1]), (box[2], box[3]), color=colors[cls_ind], thickness=2)
-        cv2.putText(im, text='cls%s' %(cls_ind), org=(box[0], box[1]), fontFace=cv2.FONT_HERSHEY_SIMPLEX, \
+        cv2.rectangle(im, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), color=colors[cls_ind], thickness=2)
+        cv2.putText(im, text='cls%s' %(cls_ind), org=(int(box[0]), int(box[1])), fontFace=cv2.FONT_HERSHEY_SIMPLEX, \
                     fontScale=0.8, color=colors[cls_ind], thickness=2)
     return im
 
@@ -38,10 +40,10 @@ def cv2_read_img(read_img_dir, img_name):
         if os.path.isfile(img_path):
             with open(os.path.join(img_path), 'rb') as f:
                 im = f.read()[-2:]
-            if not (im[:2] == b'\xff\xd8' and im[-2:] == b'\xff\xd9'):
-                print('Not complete image: %s' %img_path)
-            else:
-                img = cv2.imread(img_path, cv2.IMREAD_COLOR)
+            # if not (im[:2] == b'\xff\xd8' and im[-2:] == b'\xff\xd9'):
+            #     print('Not complete image: %s' %img_path)
+            # else:
+            img = cv2.imread(img_path, cv2.IMREAD_COLOR)
             return img
     return None
 
@@ -97,35 +99,41 @@ def add_roidb_imgrec_idx(roidb_list, imglst_path_list):
 
 
 
-checker_roidb_path = '/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/all_train_data/train_all.pkl'
-checker_roidb_path = '/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/public_data/roidbs/trainval.pkl'
-checker_roidb_path = '/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/data_from_yuhao/trainval.pkl'
+checker_roidb_path = '/home/users/he.huang/project/HDS_TOOLS/552100_6/roidbs_head/train.pkl'
+read_img_dir = ['/home/users/he.huang/project/HDS_TOOLS/552100_6/hangjing_921_1fps',]
+
+# checker_roidb_path = '/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/public_data/roidbs/trainval.pkl'
+# checker_roidb_path = '/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/data_from_yuhao/trainval.pkl'
 # checker_roidb_path = '/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/gongdi_data/roidbs_head/train.pkl'
 
-# read_img_dir = ['/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/all_train_data/train_images/']
 # write_img_dir = 'none'
 
 # checker_roidb_path = '/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/pachong_data/roidbs_head/val.pkl'
 
-# checker_roidb_path = ['/opt/hdfs/user/jianye.he/common/dataset/cocohead/roidbs/train2017.pkl']
-# checker_lst_path = ['/opt/hdfs/user/jianye.he/common/dataset/cocohead/images_lst_rec/train2017.lst']
-# checker_idx_path = ['/opt/hdfs/user/jianye.he/common/dataset/cocohead/images_lst_rec/train2017.idx']
-# checker_rec_path = ['/opt/hdfs/user/jianye.he/common/dataset/cocohead/images_lst_rec/train2017.rec']
+# checker_roidb_path = ['val2017_head.pkl']
+# checker_lst_path = ['/opt/hdfs/user/he.huang/common/dataset/cocohead/images_lst_rec/val2017.lst']
+# checker_idx_path = ['/opt/hdfs/user/he.huang/common/dataset/cocohead/images_lst_rec/val2017.idx']
+# checker_rec_path = ['/opt/hdfs/user/he.huang/common/dataset/cocohead/images_lst_rec/val2017.rec']
+
+# checker_roidb_path = ['/opt/hdfs/user/he.huang/common/dataset/cocohead/roidbs/train2017.pkl']
+# checker_lst_path = ['/opt/hdfs/user/he.huang/common/dataset/cocohead/images_lst_rec/train2017.lst']
+# checker_idx_path = ['/opt/hdfs/user/he.huang/common/dataset/cocohead/images_lst_rec/train2017.idx']
+# checker_rec_path = ['/opt/hdfs/user/he.huang/common/dataset/cocohead/images_lst_rec/train2017.rec']
 
 # checker_roidb_path = '/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/pachong_data/roidbs_head/train.pkl'
 # read_img_dir = ['/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/pachong_data/pachong_images/']
 # write_img_dir = '/mnt/data-1/he.huang/project/helmet-det-x1-job/helmet_det_x1/show_pachong_imgs'
 
-checker_roidb_path = ['/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/wider_train_pred_head.pkl']
-checker_lst_path = ['/opt/hdfs/user/he.huang/project/wider_face_2019/dataset/WiderFace2019/images_lst_rec/train.lst']
-checker_idx_path = ['/opt/hdfs/user/he.huang/project/wider_face_2019/dataset/WiderFace2019/images_lst_rec/train.idx']
-checker_rec_path = ['/opt/hdfs/user/he.huang/project/wider_face_2019/dataset/WiderFace2019/images_lst_rec/train.rec']
+# checker_roidb_path = ['/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/wider_train_pred_head.pkl']
+# checker_lst_path = ['/opt/hdfs/user/he.huang/project/wider_face_2019/dataset/WiderFace2019/images_lst_rec/train.lst']
+# checker_idx_path = ['/opt/hdfs/user/he.huang/project/wider_face_2019/dataset/WiderFace2019/images_lst_rec/train.idx']
+# checker_rec_path = ['/opt/hdfs/user/he.huang/project/wider_face_2019/dataset/WiderFace2019/images_lst_rec/train.rec']
 write_img_dir = './show'
 
-rec_read = True
+rec_read = False
 cv2_read = not rec_read
-vis = False
-vis_num = 10**10
+vis = True
+vis_num = 100
 
 if vis:
     if os.path.exists(write_img_dir):
@@ -163,13 +171,13 @@ for i, r in enumerate(roidb):
     boxRatioStat.extend( (boxes_ratio).tolist() )
     boxScaleStat.extend( (boxes_scale).tolist() )
 
-    for _ in r['gt_classes']:
-        if _ not in [-1,1,2]:
-            invalid_cnt+=1
-            invalid_img.append(img_path)
-            invalid_cls_ind.append(_)
-            print("Unexpected class id.")
-            import pdb; pdb.set_trace()
+    # for _ in r['gt_classes']:
+    #     if _ not in [-1,1,2]:
+    #         invalid_cnt+=1
+    #         invalid_img.append(img_path)
+    #         invalid_cls_ind.append(_)
+    #         print("Unexpected class id.")
+    #         import pdb; pdb.set_trace()
 
     if 1 in r['gt_classes'] or 2 in r['gt_classes']:
         non_empty_cnt += 1

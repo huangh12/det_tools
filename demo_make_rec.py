@@ -1,5 +1,6 @@
 import sys
-sys.path.insert(0, '/opt/hdfs/user/he.huang/mxnet-python-binds/mxnet-zongbo')
+# sys.path.insert(0, '/opt/hdfs/user/he.huang/mxnet-python-binds/mxnet-zongbo')
+sys.path.insert(0, '/home/users/he.huang/mxnet-zongbo')
 import mxnet as mx
 import os
 import imageio
@@ -21,9 +22,7 @@ def make_rec_from_img(img_dir, save_rec_prefix):
     lst_fn = open(save_rec_prefix + '.lst', 'w')
     imgrec = mx.recordio.MXIndexedRecordIO(save_rec_prefix + '.idx', save_rec_prefix + '.rec', 'w')
 
-    img_list = os.listdir(img_dir)
-    # corrupt = os.listdir('corrupt')
-    # img_list = list(set(img_list) - set(corrupt))
+    img_list = [_ for _ in os.listdir(img_dir) if _.endswith('.jpg')]
     random.seed(100)
     random.shuffle(img_list)
     num_images = len(img_list)
@@ -52,7 +51,7 @@ def check_rec_from_img(img_dir, rec_prefix):
     num_images = len(img_list)
     for i, img_name in enumerate(img_list):
         if i % 100 == 0:
-            print '%d/%d' % (i, num_images)
+            print('%d/%d' % (i, num_images))
         _, img = mx.recordio.unpack_img(imgrec.read_idx(img_list[img_name]), cv2.IMREAD_COLOR)
         img1 = cv2.imread(os.path.join(img_dir, img_name), cv2.IMREAD_COLOR)
         assert np.sum(abs(img - img1)) == 0
@@ -92,7 +91,7 @@ def check_rec_from_video(video_path, rec_prefix):
     video_reader = imageio.get_reader(video_path)
     for i, img_name in enumerate(img_list):
         if i % 100 == 0:
-            print '%d/%d' % (i, num_images)
+            print('%d/%d' % (i, num_images))
         # img_idx = img_list[img_name]
         img_idx = i
         _, img = mx.recordio.unpack_img(imgrec.read_idx(img_idx), cv2.IMREAD_COLOR)
@@ -103,7 +102,7 @@ def check_rec_from_video(video_path, rec_prefix):
 
 
 if __name__ == '__main__':
-    img_dir = '/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/pachong_data/pachong_images/'
-    save_rec_prefix = 'pachong/train_val_test'
+    img_dir = '/home/users/he.huang/project/HDS_TOOLS/552100_6/hangjing_921_1fps'
+    save_rec_prefix = '/home/users/he.huang/project/HDS_TOOLS/552100_6/images_lst_rec'
     make_rec_from_img(img_dir, save_rec_prefix)
     check_rec_from_img(img_dir, save_rec_prefix)

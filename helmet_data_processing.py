@@ -17,6 +17,19 @@ import random
 import json
 import cv2
 
+# merge json
+# all_json = []
+# with open('/home/users/he.huang/project/HDS_TOOLS/552100_6/data_000001.json', 'r') as f:
+#     lines = f.readlines()
+#     for line in lines:
+#         all_json.append(line.strip())
+# with open('/home/users/he.huang/project/HDS_TOOLS/552100_6/data_000002.json', 'r') as f:
+#     lines = f.readlines()
+#     for line in lines:
+#         all_json.append(line.strip())        
+# with open('/home/users/he.huang/project/HDS_TOOLS/552100_6/data_all.json', 'w') as f:
+#     f.write('\n'.join(all_json))
+# exit()
 
 def empty_dir(dir):
     if os.path.exists(dir):
@@ -25,19 +38,19 @@ def empty_dir(dir):
 
 category = 'person'
 category = 'head'
-split_ratio = 0.85
+split_ratio = 1.2
 
 if category == 'person':
     base_dir = '/opt/hdfs/user/he.huang/project/helmet-det/gongdi_data'
 else:
-    base_dir = '/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/pachong_data/json_files'
-targ_dir = '/mnt/data-1/he.huang/project/helmet-det-x1-job/INT8/pachong_reprocess'
-img_dir = '/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/pachong_data/pachong_images'
+    base_dir = '/home/users/he.huang/project/HDS_TOOLS/552100_6/'
+targ_dir = '/home/users/he.huang/project/HDS_TOOLS/552100_6/'
+img_dir = '/home/users/he.huang/project/HDS_TOOLS/552100_6/hangjing_921_1fps'
 
 all_json = []
 image_keys = dict()
 ind = 0
-with open(os.path.join(base_dir, 'raw_%s.json' %category), 'r') as f:
+with open(os.path.join(base_dir, 'data_all.json'), 'r') as f:
     line = f.readline()
     while line:
         t = json.loads(line.strip())
@@ -96,41 +109,33 @@ for s in ['train', 'val']:
         img_name = item['image_key']
         assert img_name.endswith('.jpg')
 
-        img_path = os.path.join(img_dir, img_name)
-        img = cv2.imread(img_path, cv2.IMREAD_COLOR)
+        # img_path = os.path.join(img_dir, img_name)
+        # img = cv2.imread(img_path, cv2.IMREAD_COLOR)
         roidb = {}
         roidb['image'] = img_name
         roidb['gt_classes'] = []
-        # roidb['height'] = int(item['height'])   
-        # roidb['width'] = int(item['width'])   
-        roidb['height'] = img.shape[0]
-        roidb['width'] = img.shape[1]
+        roidb['height'] = int(item['height'])   
+        roidb['width'] = int(item['width'])   
+        # roidb['height'] = img.shape[0]
+        # roidb['width'] = img.shape[1]
 
     
         boxes = []
         if category in item:
-            for obj in item[category]: #找到root节点下的所有object节点 
+            for obj in item[category]: 
                 assert str(obj['attrs']['ignore']) in ['yes', 'no']
                 if category == 'person':
                     ignore = obj['attrs']['ignore']=='yes' or \
                          obj['attrs']['occlusion']=='invisible' or\
                          obj['attrs']['hat'] == 'unknown'
-                    hat_key_name = 'hat'
                 else:
                     ignore = obj['attrs']['ignore']=='yes' or \
-                         obj['attrs']['has_hat'] == 'unknown'                    
-                    hat_key_name = 'has_hat'
+                         obj['attrs']['occlusion'] == '"invisible"'   
                 if ignore:
                     roidb['gt_classes'].append(-1)
                 else:
-                    if obj['attrs'][hat_key_name] == 'no':
-                        roidb['gt_classes'].append(1)
-                    elif obj['attrs'][hat_key_name] == 'yes':
-                        roidb['gt_classes'].append(2)
-                    else:
-                        import pdb; pdb.set_trace()
-                        assert False, 'unknown hat attr!'
-                bndbox = obj['data']      #子节点下属性bndbox的值 
+                    roidb['gt_classes'].append(1)
+                bndbox = obj['data']      
                 xmin = np.minimum( roidb['width']-1, np.maximum(0, bndbox[0]) )
                 ymin = np.minimum( roidb['height']-1, np.maximum(0, bndbox[1]) )
                 xmax = np.maximum(0, np.minimum( roidb['width']-1, bndbox[2]) )
