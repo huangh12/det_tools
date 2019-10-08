@@ -4,7 +4,7 @@
 # by Mahyar Najibi and Bharat Singh
 # --------------------------------------------------------------
 import chips
-from ..bbox.bbox_transform import clip_boxes, ignore_overlaps
+from common.bbox.bbox_transform import clip_boxes, ignore_overlaps
 import numpy as np
 
 

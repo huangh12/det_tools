@@ -4,8 +4,7 @@ Description: This file is for coco-way detection evaluation.
 author: he.huang
 '''
 
-import sys
-sys.path.insert(0, '..')
+import init_paths
 import logging
 logging.getLogger().setLevel(logging.INFO)
 import copy

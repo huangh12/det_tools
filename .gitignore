@@ -2,3 +2,5 @@
 *.so
 *.jpg
 *.pyc
+*.log
+*.json

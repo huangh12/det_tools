@@ -23,7 +23,7 @@ A typical modeling pipeline for object detection task.
 `various raw annotation file(given by data annotator)` --> `unified format gt_roidb.pkl` --> CNN (for training)
 
 `various raw annotation file(given by data annotator)` --> `unified format gt_roidb.pkl` --> `coco-format json file` (for evaluation)
-                                                                         \
+                                                                        
 
 Specifically, 
 > 1. Construct one-to-one mapping from class name to category id (catetory id is a identifier to distinguish from different classes).
@@ -39,4 +39,3 @@ Specifically,
 > For `result.pkl`, it must have 'image', 'id', 'classes', 'boxes' key-value items. What's more, the 'boxes' of `result.pkl` is a 
 > **n * 5** array (np.array([[x1,y1,x2,y2,score],[x1,y1,x2,y2,score],...,])) while `gt_roidb.pkl`'s is a **n * 4** array
 > (np.array([[x1,y1,x2,y2],[x1,y1,x2,y2],...,])).
-

@@ -38,15 +38,15 @@ step 3: To obtain the optimal anchor scale/ratio setting from the given data.
 
 author: he.huang
 '''
-
+import init_paths
 from easydict import EasyDict as edict
-from utils.data_workers import chip_worker, chip_generate
+from common.data_workers import chip_worker, chip_generate
 
 config = edict()
 config.num_classes = 1  # exclude the background
 config.test_orig_roidb_path = '/opt/hdfs/user/he.huang/project/wider_face_2019/dataset/WiderFace2019/roidbs/val.pkl'
 # config.train_orig_roidb_path = '/opt/hdfs/user/he.huang/project/wider_face_2019/dataset/WiderFace2019/roidbs/train.pkl'
-config.train_orig_roidb_path = './train_isn.pkl'
+config.train_orig_roidb_path = '../train_isn.pkl'
 config.test_scale = (1200, 1700)
 config.train_scale = (600, 1000)
 
@@ -152,7 +152,7 @@ exit()
 
 # ----------------- step 2: ISN --------------------
 import copy
-from utils.bbox.bbox_transform import *
+from common.bbox.bbox_transform import *
 import cv2
 import os
 
@@ -302,7 +302,7 @@ with open(config.isn_roidb_save_path, 'w') as f:
     cPickle.dump(isn_roidb, f, cPickle.HIGHEST_PROTOCOL)
     print('Dump generated isn_roidb to %s' %config.isn_roidb_save_path)
 
-
+exit()
 
 # ----------------- step 3: Obtain the optimal anchor ratio/scale --------------------
 '''
@@ -321,8 +321,8 @@ For now, we solve the anchor ratio/scale from isn roidb for simplicity.
 print('----------------- step 3: Obtain the optimal anchor ratio/scale --------------------')
 
 import cPickle
-from utils.anchor.generate_anchor import generate_anchors, expand_anchors
-from utils.bbox.bbox_transform import *
+from anchor.anchor.generate_anchor import generate_anchors, expand_anchors
+from anchor.bbox.bbox_transform import *
 import numpy as np
 import copy
 from tqdm import tqdm

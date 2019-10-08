@@ -11,7 +11,7 @@ import math
 import copy_reg
 import types
 from multiprocessing import Pool
-from bbox.bbox_transform import *
+from common.bbox.bbox_transform import *
 
 
 # Pickle dumping recipe for using classes with multi-processing map
