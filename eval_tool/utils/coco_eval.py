@@ -4,6 +4,7 @@ import cv2
 import json
 import numpy as np
 import logging
+logging.getLogger().setLevel(logging.INFO)
 import pickle
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
@@ -40,7 +41,7 @@ class COCOEval(object):
         self.coco = COCO(annotation_path)
         self.task_to_cls = task_to_cls
 
-        self.imageset_name = annotation_path[:-5].split('_')[-1]
+        self.imageset_name = 'val'
         self.imageset_index = self.coco.getImgIds()
         self.num_images = len(self.imageset_index)
 
@@ -70,10 +71,11 @@ class COCOEval(object):
             if not self.stuff_order:
                 self._class_ind_to_coco_ind = dict(zip(xrange(len(cat_ids)), cat_ids))
         else:
-            cats = [cat['name'] for cat in self.coco.loadCats(self.coco.getCatIds())]
+            cat_ids = sorted(self.coco.getCatIds())  # sort the CatIds to make it deterministic
+            cats = [cat['name'] for cat in self.coco.loadCats(cat_ids)]
             self.classes = ['__background__'] + cats
             self.num_classes = len(self.classes)
-            self._class_to_coco_ind = dict(zip(cats, self.coco.getCatIds()))
+            self._class_to_coco_ind = dict(zip(cats, cat_ids))
 
     def sample_on_imdb(self, roidb, filter_strategy):
         roidb, choose_inds = filter_roidb(roidb, filter_strategy, need_inds=True)
@@ -102,14 +104,14 @@ class COCOEval(object):
                         coco_eval.params.catIds = [self._class_to_coco_ind[cls]]
                         coco_eval.evaluate()
                         coco_eval.accumulate()
-                        logging.info('%s detection result:' % cls)
+                        print('%s detection result:' % cls)
                         coco_eval.summarize()
                     return
                 else:
                     assert cls == -1
             coco_eval.evaluate()
             coco_eval.accumulate()
-            logging.info('detection result:')
+            print('detection result:')
             coco_eval.summarize()
 
     def write_coco_det_results(self, detections, res_file):
@@ -126,10 +128,10 @@ class COCOEval(object):
             if self.task_to_cls is not None and 'det' in self.task_to_cls:
                 if self.task_to_cls['det'] > 0 and self.task_to_cls['det'] != cls_ind:
                     continue
-            print 'Collecting %s results (%d/%d)' % (cls, cls_ind, self.num_classes - 1)
+            print('Collecting %s results (%d/%d)' % (cls, cls_ind, self.num_classes - 1))
             coco_cat_id = self._class_to_coco_ind[cls]
             results.extend(self._coco_det_results_one_category(detections[cls_ind], coco_cat_id))
-        print 'Writing results json to %s' % res_file
+        print('Writing results json to %s' % res_file)
         with open(res_file, 'w') as f:
             json.dump(results, f, sort_keys=True, indent=4)
 
@@ -169,7 +171,7 @@ class COCOEval(object):
                     assert cls == -1
             coco_eval.evaluate()
             coco_eval.accumulate()
-            logging.info('keypoint result:')
+            print('keypoint result:')
             coco_eval.summarize()
 
     def write_coco_kps_results(self, keypoints, res_file):
@@ -183,7 +185,7 @@ class COCOEval(object):
                        'keypoints': point[0:-1],
                        'score': point[-1]} for point in points]
             results.extend(result)
-        print 'Writing results json to %s' % res_file
+        print('Writing results json to %s' % res_file)
         with open(res_file, 'w') as f:
             json.dump(results, f, sort_keys=True, indent=4)
 
@@ -208,14 +210,14 @@ class COCOEval(object):
                         coco_eval.params.catIds = [self._class_to_coco_ind[cls]]
                         coco_eval.evaluate()
                         coco_eval.accumulate()
-                        logging.info('%s mask result:' % cls)
+                        print('%s mask result:' % cls)
                         coco_eval.summarize()
                     return
                 else:
                     assert cls == -1
             coco_eval.evaluate()
             coco_eval.accumulate()
-            logging.info('mask result:')
+            print('mask result:')
             coco_eval.summarize()
 
     def write_coco_mask_results(self, detections, masks, binary_thresh, res_file):
@@ -226,10 +228,10 @@ class COCOEval(object):
             if self.task_to_cls is not None and 'mask' in self.task_to_cls:
                 if self.task_to_cls['mask'] > 0 and self.task_to_cls['mask'] != cls_ind:
                     continue
-            print 'Collecting %s results (%d/%d)' % (cls, cls_ind, self.num_classes - 1)
+            print('Collecting %s results (%d/%d)' % (cls, cls_ind, self.num_classes - 1))
             coco_cat_id = self._class_to_coco_ind[cls]
             results.extend(self._coco_mask_results_one_category(detections[cls_ind], masks[cls_ind], binary_thresh, coco_cat_id))
-        print 'Writing results json to %s' % res_file
+        print('Writing results json to %s' % res_file)
         with open(res_file, 'w') as f:
             json.dump(results, f, sort_keys=True, indent=4)
 
@@ -265,18 +267,18 @@ class COCOEval(object):
                     for cls_ind, cls in enumerate(self.classes):
                         coco_eval.params.catIds = [self._class_to_coco_ind[cls]]
                         coco_eval.evaluate()
-                        logging.info('%s seg result:' % cls)
+                        print('%s seg result:' % cls)
                         coco_eval.summarize()
                     return
                 else:
                     assert cls == -1
             coco_eval.evaluate()
-            logging.info('seg result:')
+            print('seg result:')
             coco_eval.summarize()
 
     def write_coco_stuff_results(self, stuff_results, res_file):
         with io.open(res_file, 'w', encoding='utf8') as output:
-            print 'Writing results json to %s' % res_file
+            print('Writing results json to %s' % res_file)
             # Annotation start
             output.write(unicode('[\n'))
             for i, img_id in enumerate(self.imageset_index):
@@ -326,11 +328,11 @@ class COCOEval(object):
             for image_id in self.imageset_index:
                 if image_id in self.dp_image_ids:
                     image_ids.append(image_id)
-            logging.info('filter from %d to %d' % (len(self.imageset_index), len(image_ids)))
+            print('filter from %d to %d' % (len(self.imageset_index), len(image_ids)))
             coco_eval.params.imgIds = image_ids
             coco_eval.evaluate()
             coco_eval.accumulate()
-            logging.info('densepose result:')
+            print('densepose result:')
             coco_eval.summarize()
 
     def write_coco_densepose_results(self, detections, densepose_results, res_file):
@@ -341,10 +343,10 @@ class COCOEval(object):
             if self.task_to_cls is not None and 'densepose' in self.task_to_cls:
                 if self.task_to_cls['densepose'] > 0 and self.task_to_cls['densepose'] != cls_ind:
                     continue
-            print 'Collecting %s results (%d/%d)' % (cls, cls_ind, self.num_classes - 1)
+            print('Collecting %s results (%d/%d)' % (cls, cls_ind, self.num_classes - 1))
             coco_cat_id = self._class_to_coco_ind[cls]
             results.extend(self._coco_densepose_results_one_category(detections[cls_ind], densepose_results[cls_ind], coco_cat_id))
-        print 'Writing results json to %s' % res_file
+        print('Writing results json to %s' % res_file)
         with open(res_file, 'wb') as f:
             pickle.dump(results, f, pickle.HIGHEST_PROTOCOL)
 

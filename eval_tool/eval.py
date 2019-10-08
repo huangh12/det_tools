@@ -4,7 +4,6 @@ Description: This file is for coco-way detection evaluation.
 author: he.huang
 '''
 
-
 import sys
 sys.path.insert(0, '..')
 import logging
@@ -12,40 +11,60 @@ logging.getLogger().setLevel(logging.INFO)
 import copy
 from utils.load_roidb import filter_roidb
 from utils.coco_eval import COCOEval
+from utils.gen_cocoformat_gt_json import gen_cocoformat_gt_json
 from utils.det_eval import evaluate_recall
 import cPickle
 import os
-from config import config
+from config import config as cfg
+from config import clsid2clsname, clsid2catid
+import numpy as np
 
 
-
-def load_coco_test_roidb_eval(config):
-
-    if not os.path.exists(config.cache_dir):
-        os.makedirs(config.cache_dir)
-
-    # get roidb
-    with open(config.dataset.predict_roidb, 'rb') as fn:
+def load_roidb(path):
+    with open(path, 'rb') as fn:
         roidb = cPickle.load(fn)
-        logging.info('loading num images for test: {}'.format(len(roidb)))
+    # check id key
+    assert 'id' in roidb[0], 'Images are distinguised from id (instead of image name), so id must exist!'
+    id_list = [_['id'] for _ in roidb]
+    assert len(set(id_list)) == len(id_list), 'id must be unique!'
+    return roidb, id_list
 
-    roidb, choose_inds = filter_roidb(roidb, config.filter_strategy, need_inds=True)
-    logging.info('total num images for test after sampling: {}'.format(len(roidb)))
 
-    # gt_seglabellst_path = config.dataset.gt_seglabellst_path if 'seg' in config.eval_task_type else None
+if __name__ == "__main__":
 
-    if config.dataset.coco_format_json is None or \
-                    len(config.dataset.coco_format_json) == 0:
-        logging.info('Generate coco-format json file using gt roidb...')
-        config.dataset.coco_format_json = dict()
-        for task_type in config.eval_task_type:
-            config.dataset.coco_format_json[task_type] = gen_coco_json(config.dataset.gt_roidb, savedir=config.cache_dir)
+    # mkdir to save cache
+    if os.path.exists(cfg.cache_dir):
+        os.system('rm -rf %s' %cfg.cache_dir)
+        logging.info('rm -rf %s' %cfg.cache_dir)
+    os.makedirs(cfg.cache_dir)
+    logging.info('mkdir in %s to save cache (e.g., GT/result json files)' %cfg.cache_dir)
+
+
+    # load prediction roidb
+    pred_roidb, id_list = load_roidb(cfg.dataset.predict_roidb)
+    logging.info('loading %d images from %s for evaluation.' %(len(pred_roidb), cfg.dataset.predict_roidb))
+    pred_roidb, choose_inds = filter_roidb(pred_roidb, cfg.filter_strategy, need_inds=True)
+    logging.info('sampling %d images for evaluation.' %len(pred_roidb))
+    choose_ids = [id_list[_] for _ in choose_inds]
+    
+
+    # gt_seglabellst_path = cfg.dataset.gt_seglabellst_path if 'seg' in cfg.eval_task_type else None
+
+    for task_type in cfg.eval_task_type:
+        if not (task_type in cfg.dataset.coco_format_json and \
+            os.path.isfile(cfg.dataset.coco_format_json[task_type])):
+            logging.info('Generate %s coco-format json file using gt roidb...' %task_type)
+            gt_roidb, _ = load_roidb(cfg.dataset.gt_roidb)
+            cfg.dataset.coco_format_json[task_type] = \
+                gen_cocoformat_gt_json(gt_roidb, clsid2clsname, clsid2catid, savedir=cfg.cache_dir)
+
 
     def _load_and_check_coco(anno_path, imageset_index):
-        task_to_cls = config.dataset.task_to_cls if 'task_to_cls' in config.dataset else None
-        import pdb; pdb.set_trace()
+        task_to_cls = cfg.dataset.task_to_cls if 'task_to_cls' in cfg.dataset else None
         imdb = COCOEval(anno_path, task_to_cls)
-        imdb.imageset_index = [imdb.imageset_index[i] for i in choose_inds]
+        assert set(choose_ids) == (set(choose_ids) & set(imdb.imageset_index)), \
+            'the choose_ids should be a subset of imdb.imageset_index'
+        imdb.imageset_index = choose_ids
         imdb.num_images = len(imdb.imageset_index)
         if imageset_index is None:
             imageset_index = copy.deepcopy(imdb.imageset_index)
@@ -56,33 +75,50 @@ def load_coco_test_roidb_eval(config):
 
     imdb = None
     imageset_index = None
-    imdb, imageset_index = _load_and_check_coco(config.dataset.coco_format_json['det'], imageset_index)
+    imdb, imageset_index = _load_and_check_coco(cfg.dataset.coco_format_json['det'], imageset_index)
     seg_imdb = None
-    if 'seg' in config.eval_task_type:
-        seg_imdb, imageset_index = _load_and_check_coco(config.dataset.coco_format_json['seg'], imageset_index)
+    if 'seg' in cfg.eval_task_type:
+        seg_imdb, imageset_index = _load_and_check_coco(cfg.dataset.coco_format_json['seg'], imageset_index)
     assert imageset_index is not None
 
     def eval_func(**kwargs):
-        task_type = config.eval_task_type
-        if 'rpn' in task_type and config.TEST.rpn_do_test:
+        task_type = cfg.eval_task_type
+        if 'rpn' in task_type and cfg.rpn_do_test:
             all_proposals = kwargs['all_proposals']
             for j in range(1, len(all_proposals)):
                 logging.info('***************class %d****************' % j)
-                gt_class_ind = j if config.network.rpn_rcnn_num_branch > 1 else None
-                evaluate_recall(roidb, all_proposals[j], gt_class_ind=gt_class_ind)
-        if 'rcnn' in task_type or 'retinanet' in task_type:
-            imdb.evaluate_detections(kwargs['all_boxes'], alg=kwargs['alg'] + '-det')
+                gt_class_ind = j if cfg.rpn_rcnn_num_branch > 1 else None
+                evaluate_recall(gt_roidb, all_proposals[j], gt_class_ind=gt_class_ind)
+        if 'all_boxes' in kwargs:
+            imdb.evaluate_detections(kwargs['all_boxes'], res_folder=cfg.cache_dir, alg='det')
         if 'seg' in task_type:
-            seg_imdb.evaluate_stuff(kwargs['all_seg_results'], alg=kwargs['alg'] + '-seg')
+            seg_imdb.evaluate_stuff(kwargs['all_seg_results'], res_folder=cfg.cache_dir, alg='seg')
         if 'kps' in task_type:
-            imdb.evaluate_keypoints(kwargs['all_kps_results'], alg=kwargs['alg'] + '-kps')
+            imdb.evaluate_keypoints(kwargs['all_kps_results'], res_folder=cfg.cache_dir, alg='kps')
         if 'mask' in task_type:
             imdb.evalute_mask(kwargs['all_mask_boxes'], kwargs['all_masks'],
-                              binary_thresh=config.TEST.mask_binary_thresh, alg=kwargs['alg'] + '-mask')
+                              binary_thresh=cfg.mask_binary_thresh, res_folder=cfg.cache_dir, alg='mask')
         if 'densepose' in task_type:
-            imdb.evalute_densepose(kwargs['all_densepose_boxes'], kwargs['all_densepose'], alg=kwargs['alg'] + '-densepose')
-    return roidb, eval_func
+            imdb.evalute_densepose(kwargs['all_densepose_boxes'], kwargs['all_densepose'], res_folder=cfg.cache_dir, alg='densepose')
+        logging.info('Finish evaluation!')
+    
+    kwargs = dict()
+    # prepare all_boxes
+    all_boxes = [[[] for _ in range(imdb.num_images)] for _ in range(imdb.num_classes)]
+    for i, r in enumerate(pred_roidb):
+        for cls, box in zip(r['classes'], r['boxes']):
+            assert cls > 0
+            if all_boxes[cls][i] == []:
+                all_boxes[cls][i] = box.reshape(-1, 5) 
+            else:
+                all_boxes[cls][i] = np.vstack([all_boxes[cls][i], box.reshape(-1, 5) ])
+    kwargs['all_boxes'] = all_boxes
+
+    # prepare all_proposals
+    # prepare all_seg_results
+    # prepare all_kps_results
+    # prepare all_mask_boxes
+    # prepare ...
 
 
-if __name__ == "__main__":
-    load_coco_test_roidb_eval(config)
+    eval_func(**kwargs)

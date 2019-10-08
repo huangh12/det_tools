@@ -4,23 +4,6 @@ import logging
 import numpy as np
 import chardet
 
-# def load_roidb(roidb_path, seglabellst_path=None, filter_strategy=None):
-#     with open(roidb_path, 'rb') as fn:
-#         roidb = cPickle.load(fn)
-
-#     if filter_strategy is not None:
-#         roidb = filter_roidb(roidb, filter_strategy)
-
-#     for r in roidb:
-#         r['image'] = os.path.basename(r['image'])
-#         if isinstance(r['image'] , unicode):
-#             continue
-#         encoding_type = chardet.detect(r['image'])['encoding']
-#         r['image'] = r['image'].decode(encoding_type)
-
-#     logging.info('total num images: %d' % len(roidb))
-#     return roidb
-
 
 def filter_roidb(roidb, filter_strategy, need_inds=False):
     all_choose_inds = range(len(roidb))
