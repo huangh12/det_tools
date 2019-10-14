@@ -1,6 +1,15 @@
+MS-COCO evaluation example:
+
 ```
-hdfs dfs -get hdfs://hobot-bigdata/user/he.huang/project/det_tools/eval_tool/coco2017val.pkl .
-hdfs dfs -get hdfs://hobot-bigdata/user/he.huang/project/det_tools/eval_tool/result.pkl .
+hdfs dfs -get hdfs://hobot-bigdata/user/he.huang/project/det_tools/eval_tool/example/coco/coco2017val.pkl .
+hdfs dfs -get hdfs://hobot-bigdata/user/he.huang/project/det_tools/eval_tool/example/coco/result.pkl .
+```
+
+WiderFace evaluation example:
+
+```
+hdfs dfs -get hdfs://hobot-bigdata/user/he.huang/project/det_tools/eval_tool/example/wider/val_add_ig_as_mat.pkl .
+hdfs dfs -get hdfs://hobot-bigdata/user/he.huang/project/det_tools/eval_tool/example/wider/result_050.pkl .
 ```
 
 input: 

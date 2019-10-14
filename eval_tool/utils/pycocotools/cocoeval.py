@@ -267,7 +267,7 @@ class COCOeval:
         T = len(p.iouThrs)
         G = len(gt)
         D = len(dt)
-        gtm  = np.zeros((T,G))
+        gtm  = -1*np.ones((T,G))
         dtm  = np.zeros((T,D))
         gtIg = np.array([g['_ignore'] for g in gt])
         dtIg = np.zeros((T,D))
@@ -279,7 +279,7 @@ class COCOeval:
                     m   = -1
                     for gind, g in enumerate(gt):
                         # if this gt already matched, and not a crowd, continue
-                        if gtm[tind,gind]>0 and not iscrowd[gind]:
+                        if gtm[tind,gind]>=0 and not iscrowd[gind]:
                             continue
                         # if dt matched to reg gt, and on ignore gt, stop
                         if m>-1 and gtIg[m]==0 and gtIg[gind]==1:

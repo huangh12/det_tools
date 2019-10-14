@@ -40,14 +40,14 @@ author: he.huang
 '''
 import init_paths
 from easydict import EasyDict as edict
-from common.data_workers import chip_worker, chip_generate
+from utils.data_workers import chip_worker, chip_generate
 
 config = edict()
 config.num_classes = 1  # exclude the background
 config.test_orig_roidb_path = '/opt/hdfs/user/he.huang/project/wider_face_2019/dataset/WiderFace2019/roidbs/val.pkl'
-# config.train_orig_roidb_path = '/opt/hdfs/user/he.huang/project/wider_face_2019/dataset/WiderFace2019/roidbs/train.pkl'
-config.train_orig_roidb_path = '../train_isn.pkl'
-config.test_scale = (1200, 1700)
+config.train_orig_roidb_path = '/opt/hdfs/user/he.huang/project/wider_face_2019/dataset/WiderFace2019/roidbs/train.pkl'
+# config.train_orig_roidb_path = '../train_isn.pkl'
+config.test_scale = (600, 1000)
 config.train_scale = (600, 1000)
 
 
@@ -209,13 +209,15 @@ config.chip_stride = np.random.randint(56, 60)
 # fpn-v-5_1 cs576
 # config.valid_ranges = [[-1,140], [16,280], [32,560], [64,1120], [128,-1]]
 # 16-600
-config.valid_ranges = [[-1,152], [8,304], [16,608], [32,1216], [64,-1]]
+# config.valid_ranges = [[-1,152], [8,304], [16,608], [32,1216], [64,-1]]
+# for [600,1000] test
+config.valid_ranges = [[-1,152], [2,304], [4,608], [8,1216], [16,-1]]
 # all
 # config.valid_ranges = [[0,1000], [0,1000], [0,1000], [0,1000], [0,1000]]
 
 # the setting of the learning range should refer to the distribution characteristics of TEST set.
 config.learning_range = config.valid_ranges[config.pyramid_scales.index(1)] 
-config.isn_roidb_save_path = './train_isn.pkl'
+config.isn_roidb_save_path = './train_isn_2.pkl'
 # ----------
 
 with open(config.train_orig_roidb_path, 'r') as f:

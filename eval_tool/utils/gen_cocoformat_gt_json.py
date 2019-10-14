@@ -57,6 +57,10 @@ def gen_cocoformat_gt_json(gt_roidb, clsid2clsname, clsid2catid, savedir):
                 u'id': id_,
                 u'ignore': True if r['gt_classes'][idx] < 0 else False
             })
+            # check the consistency
+            if 'ignore' in r:
+                assert (r['gt_classes'][idx] < 0) == r[u'ignore'][idx], \
+                'Warning: The gt_class of ignored box should be negative!'
             ann[u'iscrowd'] = r['iscrowd'][idx] if 'iscrowd' in r else ann[u'ignore']
             ann[u'iscrowd'] = bool(ann[u'iscrowd']) | ann[u'ignore']
             if 'segmentation' in r:
