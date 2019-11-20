@@ -17,6 +17,9 @@ class MyEncoder(json.JSONEncoder):
         else:
             return super(MyEncoder, self).default(obj)
 
+def cal_area(box):
+    h, w = np.maximum(0, box[2]-box[0]+1), np.maximum(0, box[3]-box[1]+1)
+    return np.sqrt(h*w)
 
 def gen_cocoformat_gt_json(gt_roidb, clsid2clsname, clsid2catid, savedir):
     """Generate coco-format json file from gt_roidb. 
@@ -52,7 +55,7 @@ def gen_cocoformat_gt_json(gt_roidb, clsid2clsname, clsid2catid, savedir):
             ann = ({
                 u'image_id': r['id'],
                 u'bbox': [box[0],box[1],box[2]-box[0]+1,box[3]-box[1]+1],
-                u'area': r['area'][idx],
+                u'area': r['area'][idx] if 'area' in r else cal_area(box),
                 u'category_id': clsid2catid[abs(r['gt_classes'][idx])],
                 u'id': id_,
                 u'ignore': True if r['gt_classes'][idx] < 0 else False

@@ -10,7 +10,7 @@ import os
 import glob
 import shutil
 
-image_dir = '/opt/hdfs/user/he.huang/project/helmet-det/dataset/helmet-data/pachong_data/pachong_images/'
+image_dir = 'xxx/'
 DELETE = False
 save_corrupt_dir = './corrupt'
 

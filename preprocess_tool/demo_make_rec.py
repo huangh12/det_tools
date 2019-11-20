@@ -1,6 +1,5 @@
 import sys
-# sys.path.insert(0, '/opt/hdfs/user/he.huang/mxnet-python-binds/mxnet-zongbo')
-sys.path.insert(0, '/home/users/he.huang/mxnet-zongbo')
+sys.path.insert(0, '/home/users/he.huang/mxnet/python')
 import mxnet as mx
 import os
 import imageio
@@ -22,7 +21,7 @@ def make_rec_from_img(img_dir, save_rec_prefix):
     lst_fn = open(save_rec_prefix + '.lst', 'w')
     imgrec = mx.recordio.MXIndexedRecordIO(save_rec_prefix + '.idx', save_rec_prefix + '.rec', 'w')
 
-    img_list = [_ for _ in os.listdir(img_dir) if _.endswith('.jpg')]
+    img_list = [_ for _ in os.listdir(img_dir) if _.endswith('.jpg') or _.endswith('.png')]
     random.seed(100)
     random.shuffle(img_list)
     num_images = len(img_list)
@@ -102,7 +101,7 @@ def check_rec_from_video(video_path, rec_prefix):
 
 
 if __name__ == '__main__':
-    img_dir = '/home/users/he.huang/project/HDS_TOOLS/552100_6/hangjing_921_1fps'
-    save_rec_prefix = '/home/users/he.huang/project/HDS_TOOLS/552100_6/images_lst_rec'
+    img_dir = '/home/users/xxx/train'
+    save_rec_prefix = '/home/users/xxx/images_lst_rec/train'
     make_rec_from_img(img_dir, save_rec_prefix)
     check_rec_from_img(img_dir, save_rec_prefix)
