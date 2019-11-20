@@ -2,5 +2,7 @@
 
 It current supports
 
-- [x] ISN augmentation (including data analysis)
-- [x] evaluation of detection in coco way
+- [x] preprocessing data    --> preprocess_tool
+- [x] ISN augmentation (including data analysis)    --> isn_tool
+- [x] evaluation of detection in coco way   --> eval_tool
+- [ ] profiler network  --> profiler_tool
