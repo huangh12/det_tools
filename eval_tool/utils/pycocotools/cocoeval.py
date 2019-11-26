@@ -191,7 +191,7 @@ class COCOeval:
         ious = maskUtils.iou(d,g,iscrowd)
         return ious
 
-    def computeOks(self, imgId, catId):
+    def computeOks(self, imgId, catId, symmtol=False, symmtol_lindex=None):
         p = self.params
         # dimention here should be Nxm
         gts = self._gts[imgId, catId]
@@ -208,6 +208,9 @@ class COCOeval:
         vars = (sigmas * 2)**2
         k = len(sigmas)
         # compute oks between each detection and ground truth object
+        l_index, r_index = self.kps_symmetry_index()
+        if symmtol_lindex is None:
+            symmtol_lindex = l_index
         for j, gt in enumerate(gts):
             # create bounds for ignore regions(double the gt bbox)
             g = np.array(gt['keypoints'])
@@ -223,6 +226,23 @@ class COCOeval:
                     # measure the per-keypoint distance if keypoints visible
                     dx = xd - xg
                     dy = yd - yg
+                    if symmtol:
+                        for index in symmtol_lindex:
+                            if index not in l_index:
+                                continue
+                            ind = l_index.index(index)
+                            l_ind, r_ind = l_index[ind], r_index[ind]
+                            if vg[r_ind] == 0 or vg[l_ind] == 0:
+                                continue
+                            xd_, yd_ =  xd.copy(), yd.copy()
+                            xd_[l_ind], xd_[r_ind] = xd_[r_ind], xd_[l_ind]
+                            yd_[l_ind], yd_[r_ind] = yd_[r_ind], yd_[l_ind]
+                            dx_, dy_ = xd_-xg, yd_-yg
+                            if np.exp(-(dx_[l_ind]**2 + dy_[l_ind]**2)) + np.exp(-(dx_[r_ind]**2 + dy_[r_ind]**2)) >\
+                               np.exp(-(dx[l_ind]**2 + dy[l_ind]**2)) + np.exp(-(dx[r_ind]**2 + dy[r_ind]**2)):
+                                xd, yd = xd_, yd_
+                                dx = dx_
+                                dy = dy_
                 else:
                     # measure minimum distance to keypoints in (x0,y0) & (x1,y1)
                     z = np.zeros((k))
