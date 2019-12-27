@@ -154,13 +154,13 @@ class COCOEval(object):
         return results
 
     # kps
-    def evaluate_keypoints(self, keypoints, alg='alg', res_folder=''):
+    def evaluate_keypoints(self, keypoints, kps_symmtol=False, alg='alg', res_folder=''):
         res_file = os.path.join(res_folder, 'person_keypoints_%s_%s_result.json' % (self.imageset_name, alg))
         self.write_coco_kps_results(keypoints, res_file)
         if 'test' not in self.imageset_name:
             ann_type = 'keypoints'
             coco_kps = self.coco.loadRes(res_file)
-            coco_eval = COCOeval(self.coco, coco_kps, ann_type)
+            coco_eval = COCOeval(self.coco, coco_kps, ann_type, kps_symmtol=kps_symmtol)
             coco_eval.params.imgIds = self.imageset_index
             if self.task_to_cls is not None and 'kps' in self.task_to_cls:
                 cls = self.task_to_cls['kps']

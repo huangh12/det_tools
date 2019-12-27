@@ -19,7 +19,7 @@ class MyEncoder(json.JSONEncoder):
 
 def cal_area(box):
     h, w = np.maximum(0, box[2]-box[0]+1), np.maximum(0, box[3]-box[1]+1)
-    return np.sqrt(h*w)
+    return h*w
 
 def gen_cocoformat_gt_json(gt_roidb, clsid2clsname, clsid2catid, savedir):
     """Generate coco-format json file from gt_roidb. 
@@ -60,6 +60,13 @@ def gen_cocoformat_gt_json(gt_roidb, clsid2clsname, clsid2catid, savedir):
                 u'id': id_,
                 u'ignore': True if r['gt_classes'][idx] < 0 else False
             })
+            # add keypoints (num_keypoints has big impact on AP)
+            if 'keypoints' in r.keys():
+                ann[u'keypoints'] = r['keypoints'][idx].reshape(-1).tolist()
+                num_keypoints = np.sum((r['keypoints'][idx].reshape(-1)[2::3] != 0) & (r['keypoints'][idx].reshape(-1)[2::3] != 3))
+                if 'num_keypoints' in r:
+                    assert r[u'num_keypoints'][idx] == num_keypoints
+                ann[u'num_keypoints'] = num_keypoints
             # check the consistency
             if 'ignore' in r:
                 assert (r['gt_classes'][idx] < 0) == r[u'ignore'][idx], \

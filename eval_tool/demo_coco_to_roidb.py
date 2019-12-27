@@ -97,6 +97,6 @@ def coco_to_roidb(annotation_path, save_roidb_path, task='det', data_dir='', nee
 
 
 if __name__ == '__main__':
-    annotation_path = '/opt/hdfs/user/he.huang//common/dataset/coco2017/annotations/instances_val2017.json'
+    annotation_path = '/opt/hdfs//user/he.huang/common/dataset/coco2017/annotations/person_keypoints_val2017.json'
     save_roidb_path = '/home/users/he.huang/project/det_tools/eval_tool/coco2017val.pkl'
-    coco_to_roidb(annotation_path=annotation_path, save_roidb_path=save_roidb_path, task='det', need_mask=True)
+    coco_to_roidb(annotation_path=annotation_path, save_roidb_path=save_roidb_path, task='kps', need_mask=False)

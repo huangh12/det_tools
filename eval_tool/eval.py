@@ -45,13 +45,9 @@ if __name__ == "__main__":
     pred_roidb, choose_inds = filter_roidb(pred_roidb, cfg.filter_strategy, need_inds=True)
     logging.info('sampling %d images for evaluation.' %len(pred_roidb))
     choose_ids = [id_list[_] for _ in choose_inds]
-    
-
-    # gt_seglabellst_path = cfg.dataset.gt_seglabellst_path if 'seg' in cfg.eval_task_type else None
 
     for task_type in cfg.eval_task_type:
-        if not (task_type in cfg.dataset.coco_format_json and \
-            os.path.isfile(cfg.dataset.coco_format_json[task_type])):
+        if not os.path.isfile(cfg.dataset.coco_format_json):
             logging.info('Generate %s coco-format json file using gt roidb...' %task_type)
             gt_roidb, _ = load_roidb(cfg.dataset.gt_roidb)
             cfg.dataset.coco_format_json[task_type] = \
@@ -74,10 +70,10 @@ if __name__ == "__main__":
 
     imdb = None
     imageset_index = None
-    imdb, imageset_index = _load_and_check_coco(cfg.dataset.coco_format_json['det'], imageset_index)
+    imdb, imageset_index = _load_and_check_coco(cfg.dataset.coco_format_json, imageset_index)
     seg_imdb = None
     if 'seg' in cfg.eval_task_type:
-        seg_imdb, imageset_index = _load_and_check_coco(cfg.dataset.coco_format_json['seg'], imageset_index)
+        seg_imdb, imageset_index = _load_and_check_coco(cfg.dataset.coco_format_json_seg, imageset_index)
     assert imageset_index is not None
 
     def eval_func(**kwargs):
@@ -88,7 +84,7 @@ if __name__ == "__main__":
                 logging.info('***************class %d****************' % j)
                 gt_class_ind = j if cfg.rpn_rcnn_num_branch > 1 else None
                 evaluate_recall(gt_roidb, all_proposals[j], gt_class_ind=gt_class_ind)
-        if 'all_boxes' in kwargs:
+        if 'det' in task_type:
             imdb.evaluate_detections(kwargs['all_boxes'], res_folder=cfg.cache_dir, alg='det')
         if 'seg' in task_type:
             seg_imdb.evaluate_stuff(kwargs['all_seg_results'], res_folder=cfg.cache_dir, alg='seg')
@@ -103,21 +99,26 @@ if __name__ == "__main__":
     
     kwargs = dict()
     # prepare all_boxes
-    all_boxes = [[[] for _ in range(imdb.num_images)] for _ in range(imdb.num_classes)]
-    for i, r in enumerate(pred_roidb):
-        for cls, box in zip(r['classes'], r['boxes']):
-            assert cls > 0
-            if all_boxes[cls][i] == []:
-                all_boxes[cls][i] = box.reshape(-1, 5) 
-            else:
-                all_boxes[cls][i] = np.vstack([all_boxes[cls][i], box.reshape(-1, 5) ])
-    kwargs['all_boxes'] = all_boxes
+    if 'det' in task_type:
+        all_boxes = [[[] for _ in range(imdb.num_images)] for _ in range(imdb.num_classes)]
+        for i, r in enumerate(pred_roidb):
+            for cls, box in zip(r['classes'], r['boxes']):
+                assert cls > 0
+                if all_boxes[cls][i] == []:
+                    all_boxes[cls][i] = box.reshape(-1, 5) 
+                else:
+                    all_boxes[cls][i] = np.vstack([all_boxes[cls][i], box.reshape(-1, 5) ])
+        kwargs['all_boxes'] = all_boxes
 
     # prepare all_proposals
     # prepare all_seg_results
+    
     # prepare all_kps_results
+    if 'kps' in task_type:
+        all_kps_results = [_['keypoints'].tolist() for _ in pred_roidb]
+        kwargs['all_kps_results'] = all_kps_results
+
     # prepare all_mask_boxes
     # prepare ...
-
 
     eval_func(**kwargs)

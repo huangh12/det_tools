@@ -15,9 +15,8 @@ config.mask_binary_thresh = 0.5
 config.dataset = edict()
 config.dataset.predict_roidb = './result.pkl'
 config.dataset.gt_roidb = '/home/users/he.huang/project/det_tools/eval_tool/coco2017val.pkl'
-config.dataset.coco_format_json = {
-    'det': '/opt/hdfs/user/he.huang//common/dataset/coco2017/annotations/instances_val2017.json'
-}
+config.dataset.coco_format_json = '/opt/hdfs/user/he.huang//common/dataset/coco2017/annotations/instances_val2017.json'
+config.dataset.coco_format_json_seg = None
 # only being used to generate GT json file
 clsid2clsname = {
     i:str(i) for i in range(1,81)
@@ -39,4 +38,3 @@ if 'seg' in config.eval_task_type:
 config.filter_strategy = edict()
 config.filter_strategy.remove_empty_boxes = False
 config.filter_strategy.max_num_images = None
-

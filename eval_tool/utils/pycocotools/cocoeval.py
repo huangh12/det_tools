@@ -58,7 +58,7 @@ class COCOeval:
     # Data, paper, and tutorials available at:  http://mscoco.org/
     # Code written by Piotr Dollar and Tsung-Yi Lin, 2015.
     # Licensed under the Simplified BSD License [see coco/license.txt]
-    def __init__(self, cocoGt=None, cocoDt=None, iouType='segm'):
+    def __init__(self, cocoGt=None, cocoDt=None, iouType='segm', kps_symmtol=False):
         '''
         Initialize CocoEval using coco APIs for gt and dt
         :param cocoGt: coco object with ground truth annotations
@@ -81,6 +81,7 @@ class COCOeval:
         if not cocoGt is None:
             self.params.imgIds = sorted(cocoGt.getImgIds())
             self.params.catIds = sorted(cocoGt.getCatIds())
+        self.kps_symmtol = kps_symmtol
 
 
     def _prepare(self):
@@ -191,7 +192,29 @@ class COCOeval:
         ious = maskUtils.iou(d,g,iscrowd)
         return ious
 
-    def computeOks(self, imgId, catId, symmtol=False, symmtol_lindex=None):
+    def kps_symmetry_index(self):
+        NOSE = 0
+        LEFT_EYE = 1
+        RIGHT_EYE = 2
+        LEFT_EAR = 3
+        RIGHT_EAR = 4
+        LEFT_SHOULDER = 5
+        RIGHT_SHOULDER = 6
+        LEFT_ELBOW = 7
+        RIGHT_ELBOW = 8
+        LEFT_WRIST = 9
+        RIGHT_WRIST = 10
+        LEFT_HIP = 11
+        RIGHT_HIP = 12
+        LEFT_KNEE = 13
+        RIGHT_KNEE = 14
+        LEFT_ANKLE = 15
+        RIGHT_ANKLE = 16
+        l_index = [LEFT_EYE, LEFT_EAR, LEFT_SHOULDER, LEFT_ELBOW, LEFT_WRIST, LEFT_HIP, LEFT_KNEE, LEFT_ANKLE]
+        r_index = [RIGHT_EYE, RIGHT_EAR, RIGHT_SHOULDER, RIGHT_ELBOW, RIGHT_WRIST, RIGHT_HIP, RIGHT_KNEE, RIGHT_ANKLE]
+        return l_index, r_index
+
+    def computeOks(self, imgId, catId, symmtol_lindex=None):
         p = self.params
         # dimention here should be Nxm
         gts = self._gts[imgId, catId]
@@ -226,7 +249,7 @@ class COCOeval:
                     # measure the per-keypoint distance if keypoints visible
                     dx = xd - xg
                     dy = yd - yg
-                    if symmtol:
+                    if self.kps_symmtol:
                         for index in symmtol_lindex:
                             if index not in l_index:
                                 continue
