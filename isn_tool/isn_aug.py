@@ -43,12 +43,12 @@ from easydict import EasyDict as edict
 from utils.data_workers import chip_worker, chip_generate
 
 config = edict()
-config.num_classes = 1  # exclude the background
-config.test_orig_roidb_path = '/opt/hdfs/user/he.huang/project/wider_face_2019/dataset/WiderFace2019/roidbs/val.pkl'
-config.train_orig_roidb_path = '/opt/hdfs/user/he.huang/project/wider_face_2019/dataset/WiderFace2019/roidbs/train.pkl'
-# config.train_orig_roidb_path = '../train_isn.pkl'
+config.num_classes = 3  # exclude the background
+config.test_orig_roidb_path = 'xxx.pkl'
+config.train_orig_roidb_path = 'xxx.pkl'
 config.test_scale = (600, 1000)
 config.train_scale = (600, 1000)
+config.distrib_ig_label = False
 
 
 
@@ -97,10 +97,11 @@ def analyze_roidb(roidb_path, num_classes, scale):
 
     boxClsStat = {}
     boxes = []
-    boxRatioStat = []
-    boxScaleStat = []
-    rboxScaleStat = []
-    print('distribute the ignore label -1 to all %d classes (exclude the background!!)' %num_classes)
+    boxRatioStat = {_:[] for _ in range(1, num_classes+1)}
+    boxScaleStat = {_:[] for _ in range(1, num_classes+1)}
+    rboxScaleStat = {_:[] for _ in range(1, num_classes+1)}
+    if config.distrib_ig_label:
+        print('distribute the ignore label -1 to all %d classes (exclude the background!!)' %num_classes)
     for r in roidb:
         '''
         preprocess the gt_classes:
@@ -108,15 +109,15 @@ def analyze_roidb(roidb_path, num_classes, scale):
         Since we want to generate class-aware ignore region, we manually distribute the -1 region to all classes    
         '''
         assert 0 not in r['gt_classes'], '0 in gt_classes!'
-        ig_idx = np.where(r['gt_classes'] == -1)[0]
-        append_cls = np.tile(-1 * (2 + np.arange(num_classes-1)), len(ig_idx)).astype(np.int32) 
-        append_box = np.zeros((0, 4), dtype=np.float32)
-        for idx in ig_idx:
-            append_box = np.vstack([append_box, np.tile(r['boxes'][idx], (num_classes-1,1))]).astype(np.float32)
-
-        r['gt_classes'] = np.hstack( [r['gt_classes'], append_cls] )
-        r['boxes'] = np.vstack( [r['boxes'], append_box] )
-        assert r['gt_classes'].shape[0] == r['boxes'].shape[0]
+        if config.distrib_ig_label:
+            ig_idx = np.where(r['gt_classes'] == -1)[0]
+            append_cls = np.tile(-1 * (2 + np.arange(num_classes-1)), len(ig_idx)).astype(np.int32) 
+            append_box = np.zeros((0, 4), dtype=np.float32)
+            for idx in ig_idx:
+                append_box = np.vstack([append_box, np.tile(r['boxes'][idx], (num_classes-1,1))]).astype(np.float32)
+            r['gt_classes'] = np.hstack( [r['gt_classes'], append_cls] )
+            r['boxes'] = np.vstack( [r['boxes'], append_box] )
+            assert r['gt_classes'].shape[0] == r['boxes'].shape[0]
 
         # do stat
         unique, counts = np.unique(r['gt_classes'], return_counts=True)
@@ -126,26 +127,29 @@ def analyze_roidb(roidb_path, num_classes, scale):
             else:
                 boxClsStat[u] += c
 
-        stat_idx = np.where(r['gt_classes']>0)[0]
-        boxes.extend( (r['boxes'][stat_idx].tolist()) )
-        boxes_ratio = (r['boxes'][stat_idx,3]-r['boxes'][stat_idx,1]+1) / (r['boxes'][stat_idx,2]-r['boxes'][stat_idx,0]+1)
-        boxes_scale = np.sqrt((r['boxes'][stat_idx,3]-r['boxes'][stat_idx,1]) * (r['boxes'][stat_idx,2]-r['boxes'][stat_idx,0]))
-        boxRatioStat.extend( (boxes_ratio).tolist() )
-        boxScaleStat.extend( (boxes_scale).tolist() )
+        for clsid in range(1, num_classes+1):
+            stat_idx = np.where(r['gt_classes'] == clsid)[0]
+            boxes.extend( (r['boxes'][stat_idx].tolist()) )
+            boxes_ratio = (r['boxes'][stat_idx,3]-r['boxes'][stat_idx,1]+1) / (r['boxes'][stat_idx,2]-r['boxes'][stat_idx,0]+1)
+            boxes_scale = np.sqrt((r['boxes'][stat_idx,3]-r['boxes'][stat_idx,1]) * (r['boxes'][stat_idx,2]-r['boxes'][stat_idx,0]))
+            boxRatioStat[clsid].extend( (boxes_ratio).tolist() )
+            boxScaleStat[clsid].extend( (boxes_scale).tolist() )
 
-        # We assume the r['height'] and r['width'] are correct, which should be checked first.
-        im_scale = get_im_scale(size=scale, im_shape=(r['height'],r['width']))
-        rboxScaleStat.extend( (im_scale*boxes_scale).tolist() )
+            # We assume the r['height'] and r['width'] are correct, which should be checked first.
+            im_scale = get_im_scale(size=scale, im_shape=(r['height'],r['width']))
+            rboxScaleStat[clsid].extend( (im_scale*boxes_scale).tolist() )
 
-    boxRatioStat_ = Stats(boxRatioStat, name='boxRatioStat')
-    boxScaleStat_ = Stats(boxScaleStat, name='boxScaleStat')
-    rboxScaleStat_ = Stats(rboxScaleStat, name='rescaled boxScaleStat %s'%scale)
-    boxRatioStat_.analysis(ndiv=3)
-    boxScaleStat_.analysis(ndiv=10)
-    rboxScaleStat_.analysis(ndiv=10)
+    for clsid in range(1, num_classes+1):
+        boxRatioStat_ = Stats(boxRatioStat[clsid], name='cls%d boxRatioStat' %clsid)
+        boxScaleStat_ = Stats(boxScaleStat[clsid], name='cls%d boxScaleStat' %clsid)
+        rboxScaleStat_ = Stats(rboxScaleStat[clsid], name='cls%d rescaled boxScaleStat %s'%(clsid, scale))
+        boxRatioStat_.analysis(ndiv=3)
+        boxScaleStat_.analysis(ndiv=10)
+        rboxScaleStat_.analysis(ndiv=10)
+    print(boxClsStat)
     print('=======================\n')
 
-analyze_roidb(config.test_orig_roidb_path, num_classes=config.num_classes, scale=config.test_scale)
+# analyze_roidb(config.test_orig_roidb_path, num_classes=config.num_classes, scale=config.test_scale)
 analyze_roidb(config.train_orig_roidb_path, num_classes=config.num_classes, scale=config.test_scale)
 exit()
 
